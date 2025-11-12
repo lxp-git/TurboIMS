@@ -2,14 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:label="Turbo IMS"
         android:icon="@mipmap/ic_launcher"
-        android:theme="@android:style/Theme.DeviceDefault.DayNight">
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/JetpackSplashTheme">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.MainActivity"
             android:exported="true"
-            android:label="Turbo IMS" >
+            android:theme="@style/Theme.TurbolIms">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -26,7 +28,7 @@
 
     <instrumentation
         android:name="io.github.vvb2060.ims.PrivilegedProcess"
-        android:targetPackage="${applicationId}"
-        android:label="IMS Configurator" />
+        android:label="IMS Configurator"
+        android:targetPackage="${applicationId}" />
 
 </manifest>

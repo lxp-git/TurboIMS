@@ -1,5 +1,10 @@
-package io.github.vvb2060.ims
+package io.github.vvb2060.ims.ui
 
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,59 +23,122 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.vvb2060.ims.Feature
+import io.github.vvb2060.ims.MainUiState
+import io.github.vvb2060.ims.MainViewModel
+import io.github.vvb2060.ims.R
+import io.github.vvb2060.ims.ShizukuStatus
+import io.github.vvb2060.ims.SimSelection
+import io.github.vvb2060.ims.ui.theme.TurbolImsTheme
 
-@Composable
-fun MainScreen(
-    uiState: MainUiState,
-    onFeatureSwitchChange: (Feature, Boolean) -> Unit,
-    onApplyConfiguration: () -> Unit,
-    onSelectSim: (SimSelection) -> Unit,
-    openSimSelectionDialog: () -> Unit,
-    dismissSimSelectionDialog: () -> Unit,
-    dismissConfigAppliedDialog: () -> Unit,
-    dismissShizukuUpdateDialog: () -> Unit,
-    onRequestShizukuPermission: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
-            .verticalScroll(rememberScrollState())
-    ) {
-        Header()
-        SystemInfoCard(uiState, onRequestShizukuPermission)
-        SimCardSelectionCard(uiState, openSimSelectionDialog)
-        FeaturesCard(uiState, onFeatureSwitchChange)
-        ApplyButton(uiState, onApplyConfiguration)
-        Tips()
+@OptIn(ExperimentalMaterial3Api::class)
+class MainActivity : ComponentActivity() {
+    private val viewModel: MainViewModel by viewModels()
 
-        if (uiState.showSimSelectionDialog) {
-            SimSelectionDialog(uiState, onSelectSim, dismissSimSelectionDialog)
-        }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            TurbolImsTheme {
+                val context = LocalContext.current
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-        if (uiState.showConfigAppliedDialog) {
-            ConfigAppliedDialog(dismissConfigAppliedDialog)
-        }
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
+                        CenterAlignedTopAppBar(
+                            title = {
+                                Row(
+                                    verticalAlignment = Alignment.Bottom,
+                                ) {
+                                    Text(
+                                        "Turbo IMS",
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        stringResource(id = R.string.for_pixel),
+                                        fontSize = 14.sp,
+                                        color = Color(0xFFE0E0E0),
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        )
+                    }) { innerPadding ->
+                    Column(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .background(Color(0xFFF5F5F5))
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        SystemInfoCard(
+                            uiState,
+                            onRefreshShizukuPermission = {
+                                viewModel.updateShizukuStatus()
+                            },
+                            onRequestShizukuPermission = {
+                                viewModel.requestShizukuPermission(0)
+                            },
+                        )
+                        SimCardSelectionCard(uiState) {
+                            viewModel.openSimSelectionDialog()
+                        }
+                        FeaturesCard(uiState, viewModel::onFeatureSwitchChange)
+                        ApplyButton(uiState) {
+                            viewModel.onApplyConfiguration(context)
+                        }
+                        Tips()
 
-        if (uiState.showShizukuUpdateDialog) {
-            ShizukuUpdateDialog(dismissShizukuUpdateDialog)
+                        if (uiState.showSimSelectionDialog) {
+                            SimSelectionDialog(
+                                uiState,
+                                viewModel::onSelectSim,
+                                viewModel::dismissSimSelectionDialog
+                            )
+                        }
+
+                        if (uiState.showConfigAppliedDialog) {
+                            ConfigAppliedDialog(viewModel::dismissConfigAppliedDialog)
+                        }
+
+                        if (uiState.showShizukuUpdateDialog) {
+                            ShizukuUpdateDialog(viewModel::dismissShizukuUpdateDialog)
+                        }
+                    }
+                }
+            }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.updateShizukuStatus()
+    }
 }
+
 
 @Composable
 fun Header() {
@@ -95,9 +163,15 @@ fun Header() {
 }
 
 @Composable
-fun SystemInfoCard(uiState: MainUiState, onRequestShizukuPermission: () -> Unit) {
+fun SystemInfoCard(
+    uiState: MainUiState,
+    onRefreshShizukuPermission: () -> Unit,
+    onRequestShizukuPermission: () -> Unit,
+) {
     Card(
-        modifier = Modifier.padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -127,32 +201,23 @@ fun SystemInfoCard(uiState: MainUiState, onRequestShizukuPermission: () -> Unit)
                 else -> Color(0xFF4CAF50)
             }
 
+            Text(
+                stringResource(R.string.shizuku_status, shizukuStatusText),
+                fontSize = 14.sp,
+                color = shizukuStatusColor
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                 Text(
-                    stringResource(R.string.shizuku_status, shizukuStatusText),
-                    fontSize = 14.sp,
-                    color = shizukuStatusColor
-                )
+                Button(onClick = onRefreshShizukuPermission) {
+                    Text(text = stringResource(id = R.string.refresh_permission))
+                }
                 if (uiState.shizukuStatus == ShizukuStatus.NO_PERMISSION) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = onRequestShizukuPermission) {
                         Text(text = stringResource(id = R.string.request_permission))
-                    } 
+                    }
                 }
             }
-           
 
-            if (uiState.isQpr2Beta3OrHigher) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    stringResource(id = R.string.qpr2_beta3_warning),
-                    fontSize = 13.sp,
-                    color = Color(0xFFF57C00),
-                    modifier = Modifier
-                        .background(Color(0xFFFFF3E0))
-                        .padding(12.dp)
-                )
-            }
         }
     }
 }
@@ -160,7 +225,9 @@ fun SystemInfoCard(uiState: MainUiState, onRequestShizukuPermission: () -> Unit)
 @Composable
 fun SimCardSelectionCard(uiState: MainUiState, openSimSelectionDialog: () -> Unit) {
     Card(
-        modifier = Modifier.padding(horizontal = 16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -193,7 +260,9 @@ fun SimCardSelectionCard(uiState: MainUiState, openSimSelectionDialog: () -> Uni
 @Composable
 fun FeaturesCard(uiState: MainUiState, onFeatureSwitchChange: (Feature, Boolean) -> Unit) {
     Card(
-        modifier = Modifier.padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -207,7 +276,7 @@ fun FeaturesCard(uiState: MainUiState, onFeatureSwitchChange: (Feature, Boolean)
             Spacer(modifier = Modifier.height(16.dp))
 
             Feature.entries.forEachIndexed { index, feature ->
-                val featureName = when(feature) {
+                val featureName = when (feature) {
                     Feature.VOLTE -> R.string.volte
                     Feature.VOWIFI -> R.string.vowifi
                     Feature.VT -> R.string.vt
@@ -216,7 +285,7 @@ fun FeaturesCard(uiState: MainUiState, onFeatureSwitchChange: (Feature, Boolean)
                     Feature.UT -> R.string.ut
                     Feature.FIVE_G_NR -> R.string._5g_nr
                 }
-                val featureDesc = when(feature) {
+                val featureDesc = when (feature) {
                     Feature.VOLTE -> R.string.volte_desc
                     Feature.VOWIFI -> R.string.vowifi_desc
                     Feature.VT -> R.string.vt_desc
@@ -240,8 +309,18 @@ fun FeaturesCard(uiState: MainUiState, onFeatureSwitchChange: (Feature, Boolean)
 }
 
 @Composable
-fun FeatureItem(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(modifier = Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+fun FeatureItem(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
             Spacer(modifier = Modifier.height(4.dp))
@@ -301,11 +380,15 @@ fun SimSelectionDialog(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .selectable(selected = (uiState.selectedSim == sim), onClick = { onSelectSim(sim) })
+                            .selectable(
+                                selected = (uiState.selectedSim == sim),
+                                onClick = { onSelectSim(sim) })
                             .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = (uiState.selectedSim == sim), onClick = { onSelectSim(sim) })
+                        RadioButton(
+                            selected = (uiState.selectedSim == sim),
+                            onClick = { onSelectSim(sim) })
                         Spacer(modifier = Modifier.width(16.dp))
                         Text(text)
                     }

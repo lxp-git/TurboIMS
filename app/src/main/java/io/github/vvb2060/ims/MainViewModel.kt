@@ -18,7 +18,6 @@ private const val PREFS_NAME = "ims_config"
 data class MainUiState(
     val androidVersion: String = "",
     val shizukuStatus: ShizukuStatus = ShizukuStatus.CHECKING,
-    val isQpr2Beta3OrHigher: Boolean = false,
     val selectedSim: SimSelection = SimSelection.SIM1,
     val featureSwitches: Map<Feature, Boolean> = Feature.entries.associateWith { true },
     val isApplyButtonEnabled: Boolean = false,
@@ -51,7 +50,6 @@ enum class Feature(val key: String) {
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -116,8 +114,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun updateAndroidVersionInfo() {
         val version = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
-        val isQpr2Beta3OrHigher = Build.VERSION.SDK_INT >= 36
-        _uiState.update { it.copy(androidVersion = version, isQpr2Beta3OrHigher = isQpr2Beta3OrHigher) }
+        _uiState.update { it.copy(androidVersion = version) }
     }
 
     fun onFeatureSwitchChange(feature: Feature, isChecked: Boolean) {
